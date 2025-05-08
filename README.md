@@ -1,0 +1,1 @@
+more detail to see the nerfstudio
