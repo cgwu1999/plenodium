@@ -25,8 +25,11 @@ pip install -e .
 ns-install-cli
 cd ..
 
-# WaterSplatting
+
+# Plenodium
 cd plenodium
+git submodule init
+git submodule update --recursive
 pip install --no-use-pep517 -e .
 ```
 
@@ -50,7 +53,7 @@ ns-viewer --load-config outputs/unnamed/plenodium/your_timestamp/config.yml
 ## Rendering videos
 To render a video on a trajectory (e.g., generated from the interactive viewer), run:
 ```bash
-ns-render camera-path --load-config outputs/unnamed/plenodium/your_timestamp/config.yml --camera-path-filename /your_path_to_dataset/SeathruNeRF_dataset/IUI3-RedSea/camera_paths/your_trajectory.json --output-path renders/IUI3-RedSea/water_splatting.mp4
+ns-render camera-path --load-config outputs/unnamed/plenodium/your_timestamp/config.yml --camera-path-filename /your_path_to_dataset/SeathruNeRF_dataset/IUI3-RedSea/camera_paths/your_trajectory.json --output-path renders/IUI3-RedSea/plenodium.mp4
 ```
 
 ## Rendering dataset
