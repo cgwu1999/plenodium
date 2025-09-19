@@ -49,7 +49,7 @@ ignore = [
 ]
 
 [project.entry-points.'nerfstudio.method_configs']
-plenodium-rec = "plenodium.plenodium_config:plenodium_method_0"
-plenodium-res = "plenodium.plenodium_config:plenodium_method_1"
+plenodium = "plenodium.plenodium_config:plenodium_method_0"
+plenodium-depth = "plenodium.plenodium_config:plenodium_method_1"
 
 

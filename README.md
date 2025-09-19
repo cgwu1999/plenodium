@@ -33,16 +33,45 @@ git submodule update --recursive
 pip install --no-use-pep517 -e .
 ```
 
+## Data Preparation
+
+Use Depth Anything to obtain the results, and save them in the `depth` folder as `.npy` files.
+```
+Dataset_name/
+|-- depths
+|   |-- MTN_1288.npy
+|   |-- MTN_1289.npy
+|   |  ....
+|-- images_wb
+|   |-- MTN_1288.png
+|   |-- MTN_1289.png
+|   |  ....
+|-- poses_bounds.npy
+|-- sparse
+|   |-- 0
+|       |-- cameras.bin
+|       |-- images.bin
+|       |-- points3D.bin
+|-- test_list.txt
+|-- train_list.txt
+|-- val_list.txt
+`-- validation_list.txt
+
+```
+
 ## Training
 To start the training on the [SeaThru-NeRF](https://sea-thru-nerf.github.io/) dataset, run the following commands:
 
+
+without depth
 ```bash
-ns-train plenodium-rec  --vis viewer+wandb colmap --downscale-factor 1 --colmap-path sparse/0 --data /your_path_to_dataset/ --images-path Images_wb --depths_path depths 
+ns-train plenodium  --vis viewer+wandb colmap --downscale-factor 1 --colmap-path sparse/0 --data /your_path_to_dataset/ --images-path images_wb 
 ```
-To start the training on our [Simulated](https://figshare.com/s/78307bef0248d4577880) dataset, run the following commands:
+with depth
 ```bash
-ns-train plenodium-res  --vis viewer+wandb colmap --downscale-factor 1 --data /your_path_to_dataset/ --colmap-path sparse --images-path train --depths_path depths --eval-mode interval --eval_interval 2
+ns-train plenodium-depth  --vis viewer+wandb colmap --downscale-factor 1 --colmap-path sparse/0 --data /your_path_to_dataset/ --images-path images_wb --depths_path depths 
 ```
+
 
 ## Interactive viewer
 To start the viewer and explore the trained models, run one of the following:

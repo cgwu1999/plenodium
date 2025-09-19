@@ -30,10 +30,6 @@ import torch.nn as nn
 # from nerfstudio.data.datamanagers.base_datamanager import DataManager
 import torchvision.transforms.functional as TF
 from gsplat import quat_scale_to_covar_preci
-from pytorch_msssim import MS_SSIM, SSIM
-from torch.nn import Parameter
-from typing_extensions import Literal
-
 from nerfstudio.cameras.cameras import Cameras
 from nerfstudio.data.scene_box import OrientedBox
 from nerfstudio.engine.callbacks import (
@@ -48,6 +44,10 @@ from nerfstudio.utils.math import k_nearest_sklearn, random_quat_tensor
 from nerfstudio.utils.misc import torch_compile
 from nerfstudio.utils.rich_utils import CONSOLE
 from nerfstudio.utils.spherical_harmonics import RGB2SH, SH2RGB
+from pytorch_msssim import MS_SSIM, SSIM
+from torch.nn import Parameter
+from typing_extensions import Literal
+
 from plenodium._torch_impl import quat_to_rotmat
 from plenodium.project_gaussians import project_gaussians
 from plenodium.rasterize import rasterize_gaussians, rasterize_gaussians2
@@ -208,19 +208,19 @@ class WaterModel(Model):
         self.sigma_activation = nn.Softplus()
 
         #! medium_SH
-        self.medium_feature_dc = nn.Parameter(
-            torch.tensor([[0., 0., 0.], [-5., -5., -5.], [-5., -5., -5.]])
-        )
-        self.medium_feature_rest = nn.Parameter(
-            torch.zeros(3, num_sh_bases(self.config.medium_sh_degree) - 1, 3)
-        )
-
         # self.medium_feature_dc = nn.Parameter(
-        #     torch.tensor([[0., 0., 0.], [-5., -5., -5.], [-5., -5., -5.]]).reshape(3,3,1,1,1).repeat(1,1,2,2,2)
+        #     torch.tensor([[0., 0., 0.], [-5., -5., -5.], [-5., -5., -5.]]).reshape(3,3)
         # )
         # self.medium_feature_rest = nn.Parameter(
-        #     torch.zeros(3, num_sh_bases(self.config.medium_sh_degree) - 1, 3).reshape(3,-1,3,1,1,1).repeat(1,1,1,2,2,2)
+        #     torch.zeros(3, num_sh_bases(self.config.medium_sh_degree) - 1, 3).reshape(3,-1,3)
         # )
+
+        self.medium_feature_dc = nn.Parameter(
+            torch.tensor([[0., 0., 0.], [-5., -5., -5.], [-5., -5., -5.]]).reshape(3,3,1,1,1).repeat(1,1,2,2,2)
+        )
+        self.medium_feature_rest = nn.Parameter(
+            torch.zeros(3, num_sh_bases(self.config.medium_sh_degree) - 1, 3).reshape(3,-1,3,1,1,1).repeat(1,1,1,2,2,2)
+        )
 
         if self.seed_points is not None and not self.config.random_init:
             means = torch.nn.Parameter(self.seed_points[0])  # (Location, Color)
@@ -765,12 +765,20 @@ class WaterModel(Model):
             if (hole).sum() == 0:
                 continue
 
+            # pred_depth = pred_depth * pred_alpha
+            # y = pred_depth[obj]
+            # x = psuedo_disparity[obj]
+            # a = ((y-y.mean())*(x-x.mean())).sum()/((x-x.mean())**2).sum()
+            # b = y.mean() - a * x.mean()
+            # psuedo_depth_refine = psuedo_disparity * a + b
+
             pred_depth = pred_depth * pred_alpha
+            pseudo_depth = 1/(psuedo_disparity + 0.001)
             y = pred_depth[obj]
-            x = psuedo_disparity[obj]
+            x = pseudo_depth[obj]
             a = ((y-y.mean())*(x-x.mean())).sum()/((x-x.mean())**2).sum()
             b = y.mean() - a * x.mean()
-            psuedo_depth_refine = psuedo_disparity * a + b
+            psuedo_depth_refine = pseudo_depth * a + b
 
             cx = camera.cx.item()
             cy = camera.cy.item()
@@ -993,10 +1001,10 @@ class WaterModel(Model):
 
         directions_flat = directions.view(-1, 3)
         outputs_shape = directions.shape[:-1]
-        self.medium_feature = torch.cat([self.medium_feature_dc[:,None],self.medium_feature_rest],dim=1)
-        # self.medium_feature = interpolation_medium(T, self.medium_feature_dc,self.medium_feature_rest)
+        # self.medium_feature = torch.cat([self.medium_feature_dc[:,None],self.medium_feature_rest],dim=1)
+        self.medium_feature = interpolation_medium(T, self.medium_feature_dc,self.medium_feature_rest)
         n = min(
-            self.step // self.config.sh_degree_interval, self.config.medium_sh_degree
+            self.step // self.config.medium_sh_degree_interval, self.config.medium_sh_degree
         )
 
         medium_base_out = sparse_spherical_harmonics(
@@ -1125,7 +1133,7 @@ class WaterModel(Model):
 
         rgb = rgb_object + rgb_medium
         rgb_clear_clamp = torch.clamp(rgb_clear, 0., 1.)
-        rgb_clear_unclamp = rgb_clear
+        rgb_clear_unclamp = rgb_clear / torch.quantile(rgb_clear, 0.995)
         rgb_clear = rgb_clear / (rgb_clear + 1.)
 
         depth_im = depth_im[..., None]
@@ -1146,6 +1154,7 @@ class WaterModel(Model):
             "medium_rgb": medium_rgb,
             "medium_bs": medium_bs,
             "medium_attn": medium_attn,
+            "medium_feat":self.medium_feature,  # type: ignore
         }  # type: ignore
 
     def get_gt_img(self, image: torch.Tensor):
